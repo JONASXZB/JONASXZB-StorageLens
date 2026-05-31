@@ -387,6 +387,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDevelopmentRegion = "zh-Hans";
 				INFOPLIST_KEY_CFBundleDisplayName = StorageLens;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "StorageLens 需要在你确认后删除所选照片或视频。删除前始终会再次确认。StorageLens deletes selected items only after your confirmation.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "StorageLens 只会在本机分析你授权的照片，用于查找大视频、截图、旧媒体和相似照片。照片不会上传。StorageLens analyzes authorized photos on device.";
@@ -399,7 +400,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.StorageLens;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jonasxzb.storagelens;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -419,6 +420,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDevelopmentRegion = "zh-Hans";
 				INFOPLIST_KEY_CFBundleDisplayName = StorageLens;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "StorageLens 需要在你确认后删除所选照片或视频。删除前始终会再次确认。StorageLens deletes selected items only after your confirmation.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "StorageLens 只会在本机分析你授权的照片，用于查找大视频、截图、旧媒体和相似照片。照片不会上传。StorageLens analyzes authorized photos on device.";
@@ -431,7 +433,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.StorageLens;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jonasxzb.storagelens;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
