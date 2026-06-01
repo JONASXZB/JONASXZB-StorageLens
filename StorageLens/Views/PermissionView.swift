@@ -51,10 +51,20 @@ struct PermissionView: View {
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                 if permissionManager.status == .limited {
-                    Label("当前是部分访问模式，可在系统设置中调整可见照片。", systemImage: "exclamationmark.triangle")
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                        .multilineTextAlignment(.leading)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("当前是部分访问模式，分析结果只包含你选择的照片。", systemImage: "exclamationmark.triangle")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                            .multilineTextAlignment(.leading)
+
+                        Button {
+                            permissionManager.presentLimitedLibraryPicker()
+                        } label: {
+                            Label("选择更多照片", systemImage: "photo.stack")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
 
                 VStack(spacing: 12) {

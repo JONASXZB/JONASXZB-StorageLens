@@ -8,6 +8,14 @@ struct SettingsView: View {
             Section("权限 / Permissions") {
                 LabeledContent("照片访问", value: permissionManager.statusTitle)
 
+                if permissionManager.status == .limited {
+                    Button {
+                        permissionManager.presentLimitedLibraryPicker()
+                    } label: {
+                        Label("选择更多照片", systemImage: "photo.stack")
+                    }
+                }
+
                 Button {
                     permissionManager.openAppSettings()
                 } label: {

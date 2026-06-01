@@ -41,7 +41,8 @@ enum AppFormatters {
     }()
 
     static func fileSize(_ bytes: Int64?) -> String {
-        guard let bytes, bytes > 0 else { return "待估算" }
+        guard let bytes else { return "待估算" }
+        guard bytes > 0 else { return "0 KB" }
         return byteFormatter.string(fromByteCount: bytes)
     }
 

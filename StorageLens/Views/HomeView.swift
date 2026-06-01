@@ -21,7 +21,7 @@ struct HomeView: View {
 
                 Section {
                     SummaryMetricCard(
-                        title: "预计可清理空间",
+                        title: "已估算可清理空间",
                         englishTitle: "Estimated cleanable space",
                         value: AppFormatters.fileSize(viewModel.summary?.estimatedCleanableBytes),
                         systemImage: "internaldrive"
@@ -54,9 +54,9 @@ struct HomeView: View {
                         }
 
                         Button {
-                            permissionManager.openAppSettings()
+                            permissionManager.presentLimitedLibraryPicker()
                         } label: {
-                            Label("调整照片访问范围", systemImage: "gearshape")
+                            Label("选择更多照片", systemImage: "photo.stack")
                         }
                     }
                 }

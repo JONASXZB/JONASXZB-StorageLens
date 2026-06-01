@@ -14,30 +14,65 @@ enum PhotoLibraryScannerError: LocalizedError {
 
 final class PhotoLibraryScanner {
     private let largeVideoThreshold: Int64 = 100 * 1024 * 1024
-    private let screenshotFallbackBytes: Int64 = 2 * 1024 * 1024
+    private let similarPhotoSummaryLimit = 260
 
     func scanSummary() async throws -> ScanSummary {
         try ensurePhotoAccess()
 
         let allAssets = fetchAssets()
-        let photos = allAssets.filter { $0.mediaType == .image }
-        let videos = allAssets.filter { $0.mediaType == .video }
-        let screenshots = photos.filter { $0.mediaSubtypes.contains(.photoScreenshot) }
+        let oneYearCutoff = OldMediaFilter.oneYear.cutoffDate
 
-        let largeVideos = try await fetchLargeVideos()
-        let oldMedia = try await fetchOldMedia(olderThan: .oneYear)
-        let similarGroups = try await fetchSimilarPhotoGroups(maxAssets: 260)
-        let largeVideoBytes = largeVideos.compactMap(\.estimatedFileSize).reduce(0, +)
+        var totalPhotos = 0
+        var totalVideos = 0
+        var screenshotCount = 0
+        var largeVideoCount = 0
+        var oldMediaCount = 0
+        var estimatedScreenshotBytes: Int64 = 0
+        var estimatedLargeVideoBytes: Int64 = 0
+        var recentPhotoCandidates: [PHAsset] = []
+
+        for asset in allAssets {
+            if Task.isCancelled { break }
+
+            switch asset.mediaType {
+            case .image:
+                totalPhotos += 1
+                if asset.mediaSubtypes.contains(.photoScreenshot) {
+                    screenshotCount += 1
+                    estimatedScreenshotBytes += estimatedFileSize(for: asset, kind: .screenshot)
+                } else if recentPhotoCandidates.count < similarPhotoSummaryLimit {
+                    recentPhotoCandidates.append(asset)
+                }
+            case .video:
+                totalVideos += 1
+                let estimatedBytes = estimatedFileSize(for: asset, kind: .video)
+                if estimatedBytes >= largeVideoThreshold || asset.duration >= 180 {
+                    largeVideoCount += 1
+                    estimatedLargeVideoBytes += estimatedBytes
+                }
+            default:
+                break
+            }
+
+            if let oneYearCutoff, (asset.creationDate ?? .distantFuture) < oneYearCutoff {
+                oldMediaCount += 1
+            }
+        }
+
+        let similarGroups = await similarPhotoGroups(
+            from: recentPhotoCandidates,
+            maximumAssets: similarPhotoSummaryLimit
+        )
 
         return ScanSummary(
-            totalPhotos: photos.count,
-            totalVideos: videos.count,
-            screenshotCount: screenshots.count,
-            largeVideoCount: largeVideos.count,
+            totalPhotos: totalPhotos,
+            totalVideos: totalVideos,
+            screenshotCount: screenshotCount,
+            largeVideoCount: largeVideoCount,
             similarGroupCount: similarGroups.count,
-            oldMediaCount: oldMedia.count,
-            estimatedLargeVideoBytes: largeVideoBytes,
-            estimatedScreenshotBytes: Int64(screenshots.count) * screenshotFallbackBytes,
+            oldMediaCount: oldMediaCount,
+            estimatedLargeVideoBytes: estimatedLargeVideoBytes,
+            estimatedScreenshotBytes: estimatedScreenshotBytes,
             generatedAt: Date()
         )
     }
@@ -48,7 +83,7 @@ final class PhotoLibraryScanner {
         var items: [MediaAssetItem] = []
         for asset in fetchAssets(mediaType: .video) {
             if Task.isCancelled { break }
-            let item = await makeItem(from: asset, includeFileSize: true)
+            let item = makeItem(from: asset)
             let isProbablyLarge = (item.estimatedFileSize ?? 0) >= largeVideoThreshold || item.duration >= 180
             if isProbablyLarge {
                 items.append(item)
@@ -69,7 +104,7 @@ final class PhotoLibraryScanner {
 
         for asset in screenshots {
             if Task.isCancelled { break }
-            items.append(await makeItem(from: asset, includeFileSize: true))
+            items.append(makeItem(from: asset))
         }
 
         return items.sorted {
@@ -87,8 +122,7 @@ final class PhotoLibraryScanner {
         var items: [MediaAssetItem] = []
         for asset in oldAssets {
             if Task.isCancelled { break }
-            let shouldEstimateSize = asset.mediaType == .video
-            items.append(await makeItem(from: asset, includeFileSize: shouldEstimateSize))
+            items.append(makeItem(from: asset))
         }
 
         return items
@@ -99,14 +133,21 @@ final class PhotoLibraryScanner {
 
         let photoAssets = fetchAssets(mediaType: .image)
             .filter { !$0.mediaSubtypes.contains(.photoScreenshot) }
-            .sorted { ($0.creationDate ?? .distantPast) < ($1.creationDate ?? .distantPast) }
             .prefix(maxAssets)
+
+        return await similarPhotoGroups(from: Array(photoAssets), maximumAssets: maxAssets)
+    }
+
+    private func similarPhotoGroups(from assets: [PHAsset], maximumAssets: Int) async -> [SimilarPhotoGroup] {
+        let photoAssets = assets
+            .prefix(maximumAssets)
+            .sorted { ($0.creationDate ?? .distantPast) < ($1.creationDate ?? .distantPast) }
 
         var groups: [[MediaAssetItem]] = []
 
         for asset in photoAssets {
             if Task.isCancelled { break }
-            let item = await makeItem(from: asset, includeFileSize: true)
+            let item = makeItem(from: asset)
 
             if let lastGroup = groups.indices.last,
                let previous = groups[lastGroup].last,
@@ -159,7 +200,7 @@ final class PhotoLibraryScanner {
         return assets
     }
 
-    private func makeItem(from asset: PHAsset, includeFileSize: Bool) async -> MediaAssetItem {
+    private func makeItem(from asset: PHAsset) -> MediaAssetItem {
         let kind: MediaAssetKind
         if asset.mediaType == .video {
             kind = .video
@@ -172,7 +213,7 @@ final class PhotoLibraryScanner {
         return MediaAssetItem(
             id: asset.localIdentifier,
             kind: kind,
-            estimatedFileSize: includeFileSize ? await estimatedFileSize(for: asset) : nil,
+            estimatedFileSize: estimatedFileSize(for: asset, kind: kind),
             duration: asset.duration,
             creationDate: asset.creationDate,
             pixelWidth: asset.pixelWidth,
@@ -180,38 +221,28 @@ final class PhotoLibraryScanner {
         )
     }
 
-    private func estimatedFileSize(for asset: PHAsset) async -> Int64? {
-        let resources = PHAssetResource.assetResources(for: asset)
-        var totalBytes: Int64 = 0
-        var hasValue = false
+    private func estimatedFileSize(for asset: PHAsset, kind: MediaAssetKind) -> Int64 {
+        let pixelCount = max(Int64(asset.pixelWidth) * Int64(asset.pixelHeight), 1)
 
-        for resource in resources {
-            if Task.isCancelled { break }
-            if let byteCount = await byteCount(for: resource) {
-                totalBytes += byteCount
-                hasValue = true
+        switch kind {
+        case .video:
+            let bytesPerSecond: Int64
+            switch pixelCount {
+            case 8_000_000...:
+                bytesPerSecond = 7_000_000
+            case 2_000_000...:
+                bytesPerSecond = 2_500_000
+            default:
+                bytesPerSecond = 1_000_000
             }
-        }
+            let duration = max(Int64(asset.duration.rounded(.up)), 1)
+            return max(duration * bytesPerSecond, 5 * 1024 * 1024)
 
-        return hasValue ? totalBytes : nil
-    }
+        case .screenshot:
+            return max(pixelCount / 2, 700 * 1024)
 
-    private func byteCount(for resource: PHAssetResource) async -> Int64? {
-        await withCheckedContinuation { continuation in
-            let options = PHAssetResourceRequestOptions()
-            options.isNetworkAccessAllowed = false
-            var totalBytes: Int64 = 0
-
-            PHAssetResourceManager.default().requestData(
-                for: resource,
-                options: options,
-                dataReceivedHandler: { data in
-                    totalBytes += Int64(data.count)
-                },
-                completionHandler: { error in
-                    continuation.resume(returning: error == nil ? totalBytes : nil)
-                }
-            )
+        case .photo:
+            return max(pixelCount / 3, 900 * 1024)
         }
     }
 

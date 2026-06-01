@@ -194,10 +194,17 @@ struct SimilarPhotosView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(group.title)
                                     .font(.headline)
-                                Text("建议保留一张 / Keep one suggested")
+                                Text("\(group.items.count) 张，预计可删 \(AppFormatters.fileSize(group.estimatedDuplicateBytes))")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
+
+                            Button {
+                                viewModel.selectLikelyDuplicates(in: group)
+                            } label: {
+                                Label("选择可删", systemImage: "checkmark.circle")
+                            }
+                            .buttonStyle(.bordered)
 
                             LazyVGrid(columns: columns, spacing: 10) {
                                 ForEach(group.items) { item in
@@ -228,24 +235,36 @@ struct SimilarPhotosView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            SelectionSummaryBar(
-                selectedCount: viewModel.selectedIDs.count,
-                estimatedBytes: viewModel.selectedEstimatedBytes,
-                isWorking: viewModel.isDeleting,
-                actionTitle: "删除所选"
-            ) {
-                showsDeleteConfirmation = true
+            VStack(spacing: 0) {
+                if viewModel.selectedRecommendedKeepCount > 0 {
+                    Label("已选中建议保留的照片", systemImage: "exclamationmark.triangle")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        .padding(.top, 10)
+                }
+
+                SelectionSummaryBar(
+                    selectedCount: viewModel.selectedIDs.count,
+                    estimatedBytes: viewModel.selectedEstimatedBytes,
+                    isWorking: viewModel.isDeleting,
+                    actionTitle: "删除所选"
+                ) {
+                    showsDeleteConfirmation = true
+                }
             }
+            .background(.bar)
         }
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
         .confirmationDialog("确认删除所选照片？", isPresented: $showsDeleteConfirmation, titleVisibility: .visible) {
-            Button("删除所选照片", role: .destructive) {
+            Button(viewModel.selectedRecommendedKeepCount > 0 ? "仍然删除所选照片" : "删除所选照片", role: .destructive) {
                 Task { await viewModel.deleteSelected() }
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("StorageLens 不会自动删除相似照片，请确认你已经手动选中要删除的项目。")
+            Text(viewModel.deleteConfirmationMessage)
         }
         .alert(item: $viewModel.message) { message in
             Alert(title: Text(message.title), message: Text(message.message), dismissButton: .default(Text("好")))

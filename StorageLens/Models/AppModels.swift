@@ -154,7 +154,25 @@ struct SimilarPhotoGroup: Identifiable, Hashable {
     let items: [MediaAssetItem]
 
     var recommendedKeepID: String? {
-        items.first?.id
+        items.max { lhs, rhs in
+            (
+                lhs.pixelWidth * lhs.pixelHeight,
+                lhs.estimatedFileSize ?? 0,
+                lhs.creationDate ?? .distantPast
+            ) < (
+                rhs.pixelWidth * rhs.pixelHeight,
+                rhs.estimatedFileSize ?? 0,
+                rhs.creationDate ?? .distantPast
+            )
+        }?.id
+    }
+
+    var estimatedDuplicateBytes: Int64 {
+        let keepID = recommendedKeepID
+        return items
+            .filter { $0.id != keepID }
+            .compactMap(\.estimatedFileSize)
+            .reduce(0, +)
     }
 }
 

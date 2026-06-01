@@ -336,6 +336,20 @@ final class SimilarPhotosViewModel: ObservableObject {
             .reduce(0, +)
     }
 
+    var selectedRecommendedKeepCount: Int {
+        groups.reduce(0) { count, group in
+            guard let keepID = group.recommendedKeepID else { return count }
+            return selectedIDs.contains(keepID) ? count + 1 : count
+        }
+    }
+
+    var deleteConfirmationMessage: String {
+        if selectedRecommendedKeepCount > 0 {
+            return "你选中了 \(selectedRecommendedKeepCount) 张建议保留的照片。请再次确认这些照片确实不需要。"
+        }
+        return "StorageLens 不会自动删除相似照片，请确认你已经手动选中要删除的项目。"
+    }
+
     func load() async {
         isLoading = true
         defer { isLoading = false }
@@ -353,6 +367,19 @@ final class SimilarPhotosViewModel: ObservableObject {
             selectedIDs.remove(item.id)
         } else {
             selectedIDs.insert(item.id)
+        }
+        Haptics.selectionChanged()
+    }
+
+    func selectLikelyDuplicates(in group: SimilarPhotoGroup) {
+        let keepID = group.recommendedKeepID
+        let duplicateIDs = group.items
+            .map(\.id)
+            .filter { $0 != keepID }
+
+        selectedIDs.formUnion(duplicateIDs)
+        if let keepID {
+            selectedIDs.remove(keepID)
         }
         Haptics.selectionChanged()
     }
