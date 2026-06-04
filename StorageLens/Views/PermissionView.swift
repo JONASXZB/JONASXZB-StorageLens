@@ -8,10 +8,11 @@ struct PermissionView: View {
             VStack(spacing: 28) {
                 Spacer(minLength: 24)
 
-                Image("StorageLensMark")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 96, height: 96)
+                Image(systemName: "photo.stack.fill")
+                    .font(.system(size: 48, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 92, height: 92)
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .accessibilityHidden(true)
 
                 VStack(spacing: 10) {
@@ -42,9 +43,9 @@ struct PermissionView: View {
                     )
                     PermissionPointRow(
                         systemImage: "checkmark.circle",
-                        title: "由你决定删除内容",
-                        detail: "删除前始终由你手动选择并确认。",
-                        englishDetail: "You choose what to delete."
+                        title: "由你决定整理内容",
+                        detail: "移除前始终由你手动选择并确认。",
+                        englishDetail: "You confirm every change."
                     )
                 }
                 .padding()
