@@ -219,6 +219,7 @@ final class PhotoLibraryScanner {
 
         let photoAssets = fetchAssets(mediaType: .image)
             .filter { !$0.mediaSubtypes.contains(.photoScreenshot) }
+            .filter { !$0.mediaSubtypes.contains(.photoLive) }
             .prefix(maxAssets)
 
         return await similarPhotoGroups(from: Array(photoAssets), maximumAssets: maxAssets)
