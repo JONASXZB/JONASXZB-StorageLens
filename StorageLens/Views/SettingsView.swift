@@ -66,7 +66,7 @@ struct PrivacyView: View {
             }
 
             Section("边界 / Boundaries") {
-                Text("StorageLens 只分析你授权的照片图库，不清理 iOS 系统数据，也不清理其他 App 的缓存。")
+                Text("StorageLens 只分析你授权的照片图库，不处理 iOS 系统数据，也不会读取其他 App 的缓存。")
                     .foregroundStyle(.secondary)
             }
         }
@@ -103,7 +103,7 @@ struct AboutView: View {
             }
 
             Section("不会做的事 / Cannot Do") {
-                Text("不会声称清理系统垃圾，不会加速 iPhone，不会移除隐藏缓存，也不会自动删除照片。")
+                Text("不会处理 iOS 系统数据，不会读取其他 App 的缓存，也不会自动删除照片。")
                     .foregroundStyle(.secondary)
             }
         }
