@@ -372,7 +372,7 @@ struct SimilarPhotosView: View {
 
 struct ReviewBasketView: View {
     @EnvironmentObject private var reviewBasket: ReviewBasketStore
-    @State private var showsDeleteConfirmation = false
+    @State private var showsDeleteReview = false
     @State private var showsClearConfirmation = false
 
     var body: some View {
@@ -437,20 +437,15 @@ struct ReviewBasketView: View {
                     selectedCount: reviewBasket.itemCount,
                     estimatedBytes: reviewBasket.estimatedBytes,
                     isWorking: reviewBasket.isDeleting,
-                    actionTitle: "确认删除",
+                    actionTitle: "最终确认",
                     actionSystemImage: "trash"
                 ) {
-                    showsDeleteConfirmation = true
+                    showsDeleteReview = true
                 }
             }
         }
-        .confirmationDialog("确认删除篮子中的项目？", isPresented: $showsDeleteConfirmation, titleVisibility: .visible) {
-            Button("删除篮子中的项目", role: .destructive) {
-                Task { await reviewBasket.deleteAll() }
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("这些项目会从系统照片图库中删除。StorageLens 不会自动删除任何内容，只有你在这里确认后才会执行。")
+        .navigationDestination(isPresented: $showsDeleteReview) {
+            BasketDeleteConfirmationView()
         }
         .confirmationDialog("清空 Review Basket？", isPresented: $showsClearConfirmation, titleVisibility: .visible) {
             Button("清空篮子", role: .destructive) {
@@ -465,6 +460,74 @@ struct ReviewBasketView: View {
         }
         .alert(item: $reviewBasket.message) { message in
             Alert(title: Text(message.title), message: Text(message.message), dismissButton: .default(Text("好")))
+        }
+    }
+}
+
+struct BasketDeleteConfirmationView: View {
+    @EnvironmentObject private var reviewBasket: ReviewBasketStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            Section {
+                VStack(spacing: 12) {
+                    Image(systemName: "trash.circle")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.red)
+                        .accessibilityHidden(true)
+
+                    Text("最终确认")
+                        .font(.title2.bold())
+
+                    Text("请确认这些是你想从系统照片图库移除的项目。StorageLens 不会自动删除任何内容。")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            }
+
+            Section("待删除项目 / Review") {
+                LabeledContent("项目", value: "\(reviewBasket.itemCount)")
+                LabeledContent("估算大小", value: AppFormatters.fileSize(reviewBasket.estimatedBytes))
+                LabeledContent("包含分类", value: reviewBasket.includedCategoryTitles)
+            }
+
+            Section {
+                Text("确认后，这些项目会进入系统照片 App 的“最近删除”。你仍可以在系统允许的时间内前往照片 App 恢复。")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Button(role: .destructive) {
+                    Task {
+                        await reviewBasket.deleteAll()
+                        if reviewBasket.cleanupResult != nil {
+                            dismiss()
+                        }
+                    }
+                } label: {
+                    if reviewBasket.isDeleting {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Label("删除所选项目", systemImage: "trash")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .disabled(reviewBasket.isDeleting || reviewBasket.items.isEmpty)
+            }
+        }
+        .navigationTitle("最终确认")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("取消") {
+                    dismiss()
+                }
+                .disabled(reviewBasket.isDeleting)
+            }
         }
     }
 }
