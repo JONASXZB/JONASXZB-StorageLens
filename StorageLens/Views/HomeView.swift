@@ -220,10 +220,13 @@ private extension ScanSummary {
             largeVideoCount: 0,
             similarGroupCount: 0,
             oldMediaCount: 0,
+            estimatedCleanableBytes: 0,
             estimatedLargeVideoBytes: 0,
             estimatedScreenshotBytes: 0,
             estimatedScreenRecordingBytes: 0,
             estimatedLivePhotoBytes: 0,
+            estimatedOldMediaBytes: 0,
+            estimatedSimilarPhotoBytes: 0,
             timelineMonths: [],
             generatedAt: Date()
         )

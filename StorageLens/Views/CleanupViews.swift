@@ -305,7 +305,7 @@ struct SimilarPhotosView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(group.title)
                                     .font(.headline)
-                                Text("\(group.items.count) 张，预计可删 \(AppFormatters.fileSize(group.estimatedDuplicateBytes))")
+                                Text("\(group.items.count) 张，建议保留外估算 \(AppFormatters.fileSize(group.estimatedDuplicateBytes))")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
@@ -373,6 +373,7 @@ struct SimilarPhotosView: View {
 struct ReviewBasketView: View {
     @EnvironmentObject private var reviewBasket: ReviewBasketStore
     @State private var showsDeleteConfirmation = false
+    @State private var showsClearConfirmation = false
 
     var body: some View {
         List {
@@ -397,7 +398,7 @@ struct ReviewBasketView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(basketItem.item.kind.title)
                                     .font(.headline)
-                                Text("\(basketItem.categoryKind.title) · \(AppFormatters.fileSize(basketItem.item.estimatedFileSize))")
+                                Text("\(basketItem.categoryKind.title) · 估算 \(AppFormatters.fileSize(basketItem.item.estimatedFileSize))")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                                 Text(basketItem.item.creationDate.map(AppFormatters.date) ?? "日期未知")
@@ -424,8 +425,8 @@ struct ReviewBasketView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if !reviewBasket.items.isEmpty {
-                    Button("清空") {
-                        reviewBasket.clear()
+                    Button("清空", role: .destructive) {
+                        showsClearConfirmation = true
                     }
                 }
             }
@@ -450,6 +451,14 @@ struct ReviewBasketView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("这些项目会从系统照片图库中删除。StorageLens 不会自动删除任何内容，只有你在这里确认后才会执行。")
+        }
+        .confirmationDialog("清空 Review Basket？", isPresented: $showsClearConfirmation, titleVisibility: .visible) {
+            Button("清空篮子", role: .destructive) {
+                reviewBasket.clear()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("这只会移除待确认列表，不会删除照片图库中的任何项目。")
         }
         .sheet(item: $reviewBasket.cleanupResult) { result in
             CleanupResultView(result: result)

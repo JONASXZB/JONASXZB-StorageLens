@@ -70,7 +70,7 @@ struct MediaAssetItem: Identifiable, Hashable {
 
     var accessibilityLabel: String {
         let dateText = creationDate.map(AppFormatters.date) ?? "日期未知"
-        return "\(kind.title)，\(dateText)，\(AppFormatters.fileSize(estimatedFileSize))"
+        return "\(kind.title)，\(dateText)，估算大小 \(AppFormatters.fileSize(estimatedFileSize))"
     }
 }
 
@@ -123,16 +123,15 @@ struct ScanSummary: Hashable {
     let largeVideoCount: Int
     let similarGroupCount: Int
     let oldMediaCount: Int
+    let estimatedCleanableBytes: Int64
     let estimatedLargeVideoBytes: Int64
     let estimatedScreenshotBytes: Int64
     let estimatedScreenRecordingBytes: Int64
     let estimatedLivePhotoBytes: Int64
+    let estimatedOldMediaBytes: Int64
+    let estimatedSimilarPhotoBytes: Int64
     let timelineMonths: [StorageTimelineMonth]
     let generatedAt: Date
-
-    var estimatedCleanableBytes: Int64 {
-        estimatedLargeVideoBytes + estimatedScreenshotBytes + estimatedScreenRecordingBytes + estimatedLivePhotoBytes
-    }
 
     var estimatedLibraryBytes: Int64 {
         timelineMonths.map(\.estimatedBytes).reduce(0, +)
@@ -193,7 +192,7 @@ struct ScanSummary: Hashable {
                 detail: "查看较久以前的照片和视频",
                 systemImage: "calendar",
                 itemCount: oldMediaCount,
-                estimatedBytes: nil
+                estimatedBytes: estimatedOldMediaBytes
             ),
             CleanupCategory(
                 kind: .similarPhotos,
@@ -202,7 +201,7 @@ struct ScanSummary: Hashable {
                 detail: "按时间和尺寸线索找出可能相似的照片",
                 systemImage: "square.stack.3d.up",
                 itemCount: similarGroupCount,
-                estimatedBytes: nil
+                estimatedBytes: estimatedSimilarPhotoBytes
             )
         ]
     }

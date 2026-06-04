@@ -33,7 +33,9 @@ final class PhotoLibraryScanner {
         var estimatedScreenRecordingBytes: Int64 = 0
         var estimatedLivePhotoBytes: Int64 = 0
         var estimatedLargeVideoBytes: Int64 = 0
+        var estimatedOldMediaBytes: Int64 = 0
         var timelineBuckets: [String: TimelineAccumulator] = [:]
+        var reviewCandidateBytesByID: [String: Int64] = [:]
         var recentPhotoCandidates: [PHAsset] = []
 
         for asset in allAssets {
@@ -52,9 +54,11 @@ final class PhotoLibraryScanner {
                 if kind == .screenshot {
                     screenshotCount += 1
                     estimatedScreenshotBytes += estimatedBytes
+                    reviewCandidateBytesByID[asset.localIdentifier] = estimatedBytes
                 } else if kind == .livePhoto {
                     livePhotoCount += 1
                     estimatedLivePhotoBytes += estimatedBytes
+                    reviewCandidateBytesByID[asset.localIdentifier] = estimatedBytes
                 } else if recentPhotoCandidates.count < similarPhotoSummaryLimit {
                     recentPhotoCandidates.append(asset)
                 }
@@ -63,10 +67,12 @@ final class PhotoLibraryScanner {
                 if kind == .screenRecording {
                     screenRecordingCount += 1
                     estimatedScreenRecordingBytes += estimatedBytes
+                    reviewCandidateBytesByID[asset.localIdentifier] = estimatedBytes
                 }
                 if estimatedBytes >= largeVideoThreshold || asset.duration >= 180 {
                     largeVideoCount += 1
                     estimatedLargeVideoBytes += estimatedBytes
+                    reviewCandidateBytesByID[asset.localIdentifier] = estimatedBytes
                 }
             default:
                 break
@@ -74,6 +80,8 @@ final class PhotoLibraryScanner {
 
             if let oneYearCutoff, (asset.creationDate ?? .distantFuture) < oneYearCutoff {
                 oldMediaCount += 1
+                estimatedOldMediaBytes += estimatedBytes
+                reviewCandidateBytesByID[asset.localIdentifier] = estimatedBytes
             }
         }
 
@@ -81,6 +89,13 @@ final class PhotoLibraryScanner {
             from: recentPhotoCandidates,
             maximumAssets: similarPhotoSummaryLimit
         )
+        let estimatedSimilarPhotoBytes = similarGroups.map(\.estimatedDuplicateBytes).reduce(0, +)
+        for group in similarGroups {
+            let keepID = group.recommendedKeepID
+            for item in group.items where item.id != keepID {
+                reviewCandidateBytesByID[item.id] = item.estimatedFileSize ?? 0
+            }
+        }
 
         return ScanSummary(
             totalPhotos: totalPhotos,
@@ -91,10 +106,13 @@ final class PhotoLibraryScanner {
             largeVideoCount: largeVideoCount,
             similarGroupCount: similarGroups.count,
             oldMediaCount: oldMediaCount,
+            estimatedCleanableBytes: reviewCandidateBytesByID.values.reduce(0, +),
             estimatedLargeVideoBytes: estimatedLargeVideoBytes,
             estimatedScreenshotBytes: estimatedScreenshotBytes,
             estimatedScreenRecordingBytes: estimatedScreenRecordingBytes,
             estimatedLivePhotoBytes: estimatedLivePhotoBytes,
+            estimatedOldMediaBytes: estimatedOldMediaBytes,
+            estimatedSimilarPhotoBytes: estimatedSimilarPhotoBytes,
             timelineMonths: timelineBuckets
                 .map { key, value in
                     StorageTimelineMonth(

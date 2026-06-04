@@ -63,7 +63,7 @@ struct CleanupCategoryRow: View {
                 Text("\(category.itemCount)")
                     .font(.headline)
                 if let estimatedBytes = category.estimatedBytes {
-                    Text(AppFormatters.fileSize(estimatedBytes))
+                    Text("估算 \(AppFormatters.fileSize(estimatedBytes))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -93,8 +93,8 @@ struct MediaAssetRow: View {
                         .foregroundStyle(.secondary)
 
                     HStack(spacing: 8) {
-                        Text(AppFormatters.fileSize(item.estimatedFileSize))
-                        if item.kind == .video {
+                        Text("估算 \(AppFormatters.fileSize(item.estimatedFileSize))")
+                        if item.kind == .video || item.kind == .screenRecording {
                             Text(AppFormatters.duration(item.duration))
                         }
                         Text(item.creationDate.map(AppFormatters.date) ?? "日期未知")
@@ -202,7 +202,7 @@ struct SelectionSummaryBar: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("已选择 \(selectedCount) 项")
                         .font(.headline)
-                    Text("预计 \(AppFormatters.fileSize(estimatedBytes))")
+                    Text("估算 \(AppFormatters.fileSize(estimatedBytes))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
