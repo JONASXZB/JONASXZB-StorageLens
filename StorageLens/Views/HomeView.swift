@@ -93,6 +93,12 @@ struct HomeView: View {
                                 }
                             }
                         }
+
+                        NavigationLink {
+                            StorageTimelineView(summary: summary)
+                        } label: {
+                            Label("查看全部月份", systemImage: "calendar")
+                        }
                     }
                 }
             }
@@ -206,6 +212,118 @@ private struct OverviewMetric: View {
                 .contentTransition(.numericText())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct StorageTimelineView: View {
+    let summary: ScanSummary
+
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Storage Timeline", systemImage: "calendar")
+                        .font(.headline)
+
+                    Text("按月份查看照片图库的估算占用。所有统计都来自本机 PhotoKit 元数据，不上传照片。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    if let insightText = summary.insightText {
+                        Label(insightText, systemImage: "lightbulb")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            if summary.timelineMonths.isEmpty {
+                Section {
+                    EmptyStateView(
+                        systemImage: "calendar.badge.exclamationmark",
+                        title: "暂无时间线数据",
+                        message: "完成照片图库分析后，各月份估算占用会显示在这里。"
+                    )
+                }
+            } else {
+                Section("月份 / Months") {
+                    ForEach(summary.timelineMonths) { month in
+                        TimelineMonthRow(
+                            month: month,
+                            maximumBytes: summary.timelineMonths.first?.estimatedBytes ?? month.estimatedBytes
+                        )
+                    }
+                }
+            }
+        }
+        .navigationTitle("Storage Timeline")
+    }
+}
+
+private struct TimelineMonthRow: View {
+    let month: StorageTimelineMonth
+    let maximumBytes: Int64
+
+    private var fillFraction: Double {
+        guard maximumBytes > 0 else { return 0 }
+        return min(Double(month.estimatedBytes) / Double(maximumBytes), 1)
+    }
+
+    private var videoFraction: Double {
+        guard month.estimatedBytes > 0 else { return 0 }
+        return min(Double(month.estimatedVideoBytes) / Double(month.estimatedBytes), 1)
+    }
+
+    private var dominantMediaText: String {
+        month.estimatedVideoBytes >= month.estimatedPhotoBytes ? "主要来自视频" : "主要来自照片"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(month.title)
+                        .font(.headline)
+                    Text("\(month.itemCount) 项 · \(dominantMediaText)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text(AppFormatters.fileSize(month.estimatedBytes))
+                    .font(.headline)
+                    .monospacedDigit()
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(Color(.tertiarySystemGroupedBackground))
+
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(.blue.opacity(0.25))
+                        .frame(width: proxy.size.width * fillFraction)
+
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(.blue)
+                        .frame(width: proxy.size.width * fillFraction * videoFraction)
+                }
+            }
+            .frame(height: 8)
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Label("照片估算 \(AppFormatters.fileSize(month.estimatedPhotoBytes))", systemImage: "photo")
+                Label("视频估算 \(AppFormatters.fileSize(month.estimatedVideoBytes))", systemImage: "video")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(month.title)，\(month.itemCount) 项，估算 \(AppFormatters.fileSize(month.estimatedBytes))，\(dominantMediaText)")
     }
 }
 
