@@ -294,6 +294,11 @@ final class ScreenshotsViewModel: ObservableObject {
         Haptics.selectionChanged()
     }
 
+    func isMonthFullySelected(_ group: ScreenshotMonthGroup) -> Bool {
+        let groupIDs = Set(group.items.map(\.id))
+        return !groupIDs.isEmpty && groupIDs.isSubset(of: selectedIDs)
+    }
+
     func toggleMonth(_ group: ScreenshotMonthGroup) {
         let groupIDs = Set(group.items.map(\.id))
         if groupIDs.isSubset(of: selectedIDs) {

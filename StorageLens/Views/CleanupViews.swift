@@ -89,11 +89,12 @@ struct ScreenshotsView: View {
                 } else {
                     ForEach(viewModel.groups) { group in
                         VStack(alignment: .leading, spacing: 10) {
+                            let isFullySelected = viewModel.isMonthFullySelected(group)
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(group.title)
                                         .font(.headline)
-                                    Text("\(group.items.count) 张截图")
+                                    Text("\(group.items.count) 张截图 · 估算 \(AppFormatters.fileSize(group.estimatedBytes))")
                                         .font(.footnote)
                                         .foregroundStyle(.secondary)
                                 }
@@ -103,11 +104,10 @@ struct ScreenshotsView: View {
                                 Button {
                                     viewModel.toggleMonth(group)
                                 } label: {
-                                    Label("全选", systemImage: "checkmark.circle")
-                                        .labelStyle(.iconOnly)
+                                    Label(isFullySelected ? "取消" : "全选", systemImage: isFullySelected ? "minus.circle" : "checkmark.circle")
                                 }
                                 .buttonStyle(.bordered)
-                                .accessibilityLabel("选择 \(group.title) 的全部截图")
+                                .accessibilityLabel(isFullySelected ? "取消选择 \(group.title) 的全部截图" : "选择 \(group.title) 的全部截图")
                             }
 
                             LazyVGrid(columns: columns, spacing: 10) {
