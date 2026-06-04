@@ -25,27 +25,45 @@ final class PhotoLibraryScanner {
         var totalPhotos = 0
         var totalVideos = 0
         var screenshotCount = 0
+        var screenRecordingCount = 0
+        var livePhotoCount = 0
         var largeVideoCount = 0
         var oldMediaCount = 0
         var estimatedScreenshotBytes: Int64 = 0
+        var estimatedScreenRecordingBytes: Int64 = 0
+        var estimatedLivePhotoBytes: Int64 = 0
         var estimatedLargeVideoBytes: Int64 = 0
+        var timelineBuckets: [String: TimelineAccumulator] = [:]
         var recentPhotoCandidates: [PHAsset] = []
 
         for asset in allAssets {
             if Task.isCancelled { break }
+            let kind = mediaKind(for: asset)
+            let estimatedBytes = estimatedFileSize(for: asset, kind: kind)
+            let monthKey = AppFormatters.monthKey(for: asset.creationDate)
+            timelineBuckets[monthKey, default: TimelineAccumulator(date: asset.creationDate)].add(
+                asset: asset,
+                estimatedBytes: estimatedBytes
+            )
 
             switch asset.mediaType {
             case .image:
                 totalPhotos += 1
-                if asset.mediaSubtypes.contains(.photoScreenshot) {
+                if kind == .screenshot {
                     screenshotCount += 1
-                    estimatedScreenshotBytes += estimatedFileSize(for: asset, kind: .screenshot)
+                    estimatedScreenshotBytes += estimatedBytes
+                } else if kind == .livePhoto {
+                    livePhotoCount += 1
+                    estimatedLivePhotoBytes += estimatedBytes
                 } else if recentPhotoCandidates.count < similarPhotoSummaryLimit {
                     recentPhotoCandidates.append(asset)
                 }
             case .video:
                 totalVideos += 1
-                let estimatedBytes = estimatedFileSize(for: asset, kind: .video)
+                if kind == .screenRecording {
+                    screenRecordingCount += 1
+                    estimatedScreenRecordingBytes += estimatedBytes
+                }
                 if estimatedBytes >= largeVideoThreshold || asset.duration >= 180 {
                     largeVideoCount += 1
                     estimatedLargeVideoBytes += estimatedBytes
@@ -68,11 +86,27 @@ final class PhotoLibraryScanner {
             totalPhotos: totalPhotos,
             totalVideos: totalVideos,
             screenshotCount: screenshotCount,
+            screenRecordingCount: screenRecordingCount,
+            livePhotoCount: livePhotoCount,
             largeVideoCount: largeVideoCount,
             similarGroupCount: similarGroups.count,
             oldMediaCount: oldMediaCount,
             estimatedLargeVideoBytes: estimatedLargeVideoBytes,
             estimatedScreenshotBytes: estimatedScreenshotBytes,
+            estimatedScreenRecordingBytes: estimatedScreenRecordingBytes,
+            estimatedLivePhotoBytes: estimatedLivePhotoBytes,
+            timelineMonths: timelineBuckets
+                .map { key, value in
+                    StorageTimelineMonth(
+                        id: key,
+                        title: AppFormatters.monthTitle(for: value.date),
+                        estimatedBytes: value.estimatedBytes,
+                        estimatedPhotoBytes: value.estimatedPhotoBytes,
+                        estimatedVideoBytes: value.estimatedVideoBytes,
+                        itemCount: value.itemCount
+                    )
+                }
+                .sorted { $0.estimatedBytes > $1.estimatedBytes },
             generatedAt: Date()
         )
     }
@@ -109,6 +143,40 @@ final class PhotoLibraryScanner {
 
         return items.sorted {
             ($0.creationDate ?? .distantPast) > ($1.creationDate ?? .distantPast)
+        }
+    }
+
+    func fetchScreenRecordings() async throws -> [MediaAssetItem] {
+        try ensurePhotoAccess()
+
+        var items: [MediaAssetItem] = []
+        for asset in fetchAssets(mediaType: .video) {
+            if Task.isCancelled { break }
+            guard isLikelyScreenRecording(asset) else { continue }
+            items.append(makeItem(from: asset))
+        }
+
+        return items.sorted {
+            ($0.estimatedFileSize ?? 0, $0.creationDate ?? .distantPast) >
+                ($1.estimatedFileSize ?? 0, $1.creationDate ?? .distantPast)
+        }
+    }
+
+    func fetchLivePhotos() async throws -> [MediaAssetItem] {
+        try ensurePhotoAccess()
+
+        var items: [MediaAssetItem] = []
+        let livePhotos = fetchAssets(mediaType: .image)
+            .filter { $0.mediaSubtypes.contains(.photoLive) }
+
+        for asset in livePhotos {
+            if Task.isCancelled { break }
+            items.append(makeItem(from: asset))
+        }
+
+        return items.sorted {
+            ($0.estimatedFileSize ?? 0, $0.creationDate ?? .distantPast) >
+                ($1.estimatedFileSize ?? 0, $1.creationDate ?? .distantPast)
         }
     }
 
@@ -201,14 +269,7 @@ final class PhotoLibraryScanner {
     }
 
     private func makeItem(from asset: PHAsset) -> MediaAssetItem {
-        let kind: MediaAssetKind
-        if asset.mediaType == .video {
-            kind = .video
-        } else if asset.mediaSubtypes.contains(.photoScreenshot) {
-            kind = .screenshot
-        } else {
-            kind = .photo
-        }
+        let kind = mediaKind(for: asset)
 
         return MediaAssetItem(
             id: asset.localIdentifier,
@@ -221,11 +282,23 @@ final class PhotoLibraryScanner {
         )
     }
 
+    private func mediaKind(for asset: PHAsset) -> MediaAssetKind {
+        if asset.mediaType == .video {
+            return isLikelyScreenRecording(asset) ? .screenRecording : .video
+        } else if asset.mediaSubtypes.contains(.photoScreenshot) {
+            return .screenshot
+        } else if asset.mediaSubtypes.contains(.photoLive) {
+            return .livePhoto
+        } else {
+            return .photo
+        }
+    }
+
     private func estimatedFileSize(for asset: PHAsset, kind: MediaAssetKind) -> Int64 {
         let pixelCount = max(Int64(asset.pixelWidth) * Int64(asset.pixelHeight), 1)
 
         switch kind {
-        case .video:
+        case .video, .screenRecording:
             let bytesPerSecond: Int64
             switch pixelCount {
             case 8_000_000...:
@@ -241,9 +314,22 @@ final class PhotoLibraryScanner {
         case .screenshot:
             return max(pixelCount / 2, 700 * 1024)
 
+        case .livePhoto:
+            return max(pixelCount / 2, 2 * 1024 * 1024)
+
         case .photo:
             return max(pixelCount / 3, 900 * 1024)
         }
+    }
+
+    private func isLikelyScreenRecording(_ asset: PHAsset) -> Bool {
+        guard asset.mediaType == .video, asset.duration >= 5 else { return false }
+        let width = max(asset.pixelWidth, 1)
+        let height = max(asset.pixelHeight, 1)
+        let longSide = max(width, height)
+        let shortSide = min(width, height)
+        let aspectRatio = Double(longSide) / Double(shortSide)
+        return longSide >= 1280 && aspectRatio >= 1.75 && aspectRatio <= 2.35
     }
 
     private func isProbablySimilar(_ lhs: MediaAssetItem, _ rhs: MediaAssetItem) -> Bool {
@@ -261,5 +347,23 @@ final class PhotoLibraryScanner {
         let larger = max(lhsSize, rhsSize)
         let smaller = max(min(lhsSize, rhsSize), 1)
         return Double(larger - smaller) / Double(smaller) <= 0.18
+    }
+}
+
+private struct TimelineAccumulator {
+    let date: Date?
+    private(set) var estimatedBytes: Int64 = 0
+    private(set) var estimatedPhotoBytes: Int64 = 0
+    private(set) var estimatedVideoBytes: Int64 = 0
+    private(set) var itemCount: Int = 0
+
+    mutating func add(asset: PHAsset, estimatedBytes: Int64) {
+        self.estimatedBytes += estimatedBytes
+        itemCount += 1
+        if asset.mediaType == .video {
+            estimatedVideoBytes += estimatedBytes
+        } else {
+            estimatedPhotoBytes += estimatedBytes
+        }
     }
 }

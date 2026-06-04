@@ -193,6 +193,7 @@ struct SelectionSummaryBar: View {
     let estimatedBytes: Int64
     let isWorking: Bool
     let actionTitle: String
+    var actionSystemImage = "tray.and.arrow.down"
     let action: () -> Void
 
     var body: some View {
@@ -212,7 +213,7 @@ struct SelectionSummaryBar: View {
                     if isWorking {
                         ProgressView()
                     } else {
-                        Label(actionTitle, systemImage: "trash")
+                        Label(actionTitle, systemImage: actionSystemImage)
                     }
                 }
                 .buttonStyle(.borderedProminent)

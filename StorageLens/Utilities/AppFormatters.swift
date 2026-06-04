@@ -73,7 +73,11 @@ enum AppFormatters {
     }
 
     static func monthKey(for item: MediaAssetItem) -> String {
-        guard let date = item.creationDate else { return "unknown" }
+        monthKey(for: item.creationDate)
+    }
+
+    static func monthKey(for date: Date?) -> String {
+        guard let date else { return "unknown" }
         return monthKeyFormatter.string(from: date)
     }
 }
