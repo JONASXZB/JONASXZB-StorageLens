@@ -344,7 +344,7 @@ final class ScreenRecordingsViewModel: ObservableObject {
             applySort()
             selectedIDs = selectedIDs.intersection(Set(items.map(\.id)))
         } catch {
-            message = UserMessage(title: "无法载入屏幕录制", message: error.localizedDescription)
+            message = UserMessage(title: "无法载入可能的屏幕录制", message: error.localizedDescription)
         }
     }
 

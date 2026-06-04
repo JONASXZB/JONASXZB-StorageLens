@@ -91,7 +91,7 @@ enum CleanupCategoryKind: String, CaseIterable, Identifiable {
         case .screenshots:
             return "屏幕截图"
         case .screenRecordings:
-            return "屏幕录制"
+            return "可能的屏幕录制"
         case .livePhotos:
             return "Live Photos"
         case .oldMedia:
@@ -169,9 +169,9 @@ struct ScanSummary: Hashable {
             ),
             CleanupCategory(
                 kind: .screenRecordings,
-                title: "屏幕录制",
-                englishTitle: "Screen Recordings",
-                detail: "查看可能的屏幕录制视频",
+                title: "可能的屏幕录制",
+                englishTitle: "Possible Screen Recordings",
+                detail: "基于尺寸和时长线索谨慎识别",
                 systemImage: "record.circle",
                 itemCount: screenRecordingCount,
                 estimatedBytes: estimatedScreenRecordingBytes

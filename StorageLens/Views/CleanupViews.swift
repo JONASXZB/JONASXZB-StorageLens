@@ -172,7 +172,7 @@ struct ScreenRecordingsView: View {
             }
 
             if viewModel.isLoading && viewModel.items.isEmpty {
-                ProgressView("正在查找屏幕录制...")
+                ProgressView("正在查找可能的屏幕录制...")
             } else if viewModel.items.isEmpty {
                 EmptyStateView(
                     systemImage: "record.circle",
@@ -191,7 +191,7 @@ struct ScreenRecordingsView: View {
                 }
             }
         }
-        .navigationTitle("屏幕录制")
+        .navigationTitle("可能的屏幕录制")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 ReviewBasketLink()
