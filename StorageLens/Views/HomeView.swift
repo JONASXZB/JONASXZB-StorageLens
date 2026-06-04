@@ -12,7 +12,7 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("StorageLens")
                             .font(.largeTitle.bold())
-                        Text("私密释放空间 / Free up space, privately.")
+                        Text("私密整理图库 / Review storage, privately.")
                             .font(.headline)
                             .foregroundStyle(.secondary)
                     }
@@ -36,7 +36,7 @@ struct HomeView: View {
                     .foregroundStyle(.secondary)
                 }
 
-                Section("清理建议 / Cleanup") {
+                Section("整理建议 / Review") {
                     if viewModel.isLoading && viewModel.summary == nil {
                         ProgressView("正在分析照片图库...")
                     }
@@ -172,7 +172,7 @@ private struct StorageOverviewCard: View {
 
             HStack(spacing: 16) {
                 OverviewMetric(
-                    title: "可清理",
+                    title: "待整理估算",
                     value: AppFormatters.fileSize(summary?.estimatedCleanableBytes)
                 )
                 OverviewMetric(

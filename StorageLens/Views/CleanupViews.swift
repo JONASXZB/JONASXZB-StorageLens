@@ -305,7 +305,7 @@ struct SimilarPhotosView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(group.title)
                                     .font(.headline)
-                                Text("\(group.items.count) 张，建议保留外估算 \(AppFormatters.fileSize(group.estimatedDuplicateBytes))")
+                                Text("\(group.items.count) 张，保留建议外估算 \(AppFormatters.fileSize(group.estimatedDuplicateBytes))")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
@@ -313,7 +313,7 @@ struct SimilarPhotosView: View {
                             Button {
                                 viewModel.selectLikelyDuplicates(in: group)
                             } label: {
-                                Label("选择可删", systemImage: "checkmark.circle")
+                                Label("选择建议项", systemImage: "checkmark.circle")
                             }
                             .buttonStyle(.bordered)
 

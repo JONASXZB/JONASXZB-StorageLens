@@ -153,7 +153,7 @@ struct ScanSummary: Hashable {
                 kind: .largeVideos,
                 title: "大视频",
                 englishTitle: "Large Videos",
-                detail: "优先查看占用空间较大的视频",
+                detail: "优先查看估算占用较大的视频",
                 systemImage: "video.fill",
                 itemCount: largeVideoCount,
                 estimatedBytes: estimatedLargeVideoBytes
@@ -162,7 +162,7 @@ struct ScanSummary: Hashable {
                 kind: .screenshots,
                 title: "屏幕截图",
                 englishTitle: "Screenshots",
-                detail: "按月份整理截图，手动选择删除",
+                detail: "按月份整理截图，加入篮子后确认",
                 systemImage: "rectangle.on.rectangle",
                 itemCount: screenshotCount,
                 estimatedBytes: estimatedScreenshotBytes
@@ -180,7 +180,7 @@ struct ScanSummary: Hashable {
                 kind: .livePhotos,
                 title: "Live Photos",
                 englishTitle: "Live Photos",
-                detail: "只支持查看和手动删除，不转换格式",
+                detail: "只支持查看和手动选择，不转换格式",
                 systemImage: "livephoto",
                 itemCount: livePhotoCount,
                 estimatedBytes: estimatedLivePhotoBytes
