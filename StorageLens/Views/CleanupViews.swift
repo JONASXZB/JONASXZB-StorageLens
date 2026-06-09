@@ -398,7 +398,7 @@ struct ReviewBasketView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(basketItem.item.kind.title)
                                     .font(.headline)
-                                Text("\(basketItem.categoryKind.title) · 估算 \(AppFormatters.fileSize(basketItem.item.estimatedFileSize))")
+                                Text("\(basketItem.categoryTitles) · 估算 \(AppFormatters.fileSize(basketItem.item.estimatedFileSize))")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                                 Text(basketItem.item.creationDate.map(AppFormatters.date) ?? "日期未知")

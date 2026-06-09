@@ -256,9 +256,16 @@ struct SimilarPhotoGroup: Identifiable, Hashable {
 
 struct ReviewBasketItem: Identifiable, Hashable {
     let item: MediaAssetItem
-    let categoryKind: CleanupCategoryKind
+    let categoryKinds: Set<CleanupCategoryKind>
 
     var id: String { item.id }
+
+    var categoryTitles: String {
+        CleanupCategoryKind.allCases
+            .filter { categoryKinds.contains($0) }
+            .map(\.title)
+            .joined(separator: "、")
+    }
 }
 
 struct CleanupResult: Identifiable, Hashable {

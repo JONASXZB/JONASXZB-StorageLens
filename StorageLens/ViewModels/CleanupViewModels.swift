@@ -28,7 +28,7 @@ final class ReviewBasketStore: ObservableObject {
     }
 
     var includedCategoryTitles: String {
-        let kinds = Set(itemsByID.values.map(\.categoryKind))
+        let kinds = Set(itemsByID.values.flatMap(\.categoryKinds))
         return CleanupCategoryKind.allCases
             .filter { kinds.contains($0) }
             .map(\.title)
@@ -37,7 +37,8 @@ final class ReviewBasketStore: ObservableObject {
 
     func add(_ items: [MediaAssetItem], from categoryKind: CleanupCategoryKind) {
         for item in items {
-            itemsByID[item.id] = ReviewBasketItem(item: item, categoryKind: categoryKind)
+            let categoryKinds = itemsByID[item.id]?.categoryKinds.union([categoryKind]) ?? [categoryKind]
+            itemsByID[item.id] = ReviewBasketItem(item: item, categoryKinds: categoryKinds)
         }
         Haptics.selectionChanged()
     }
