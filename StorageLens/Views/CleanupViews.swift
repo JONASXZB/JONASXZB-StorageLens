@@ -160,7 +160,7 @@ struct ScreenRecordingsView: View {
     var body: some View {
         List {
             Section {
-                Text("这里显示可能的屏幕录制视频。识别基于本机尺寸和时长线索，可能并不完全准确。")
+                Text("这里显示可能的屏幕录制视频。识别优先使用照片图库标记，并结合本机尺寸和时长线索，可能并不完全准确。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 

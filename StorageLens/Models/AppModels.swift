@@ -171,7 +171,7 @@ struct ScanSummary: Hashable {
                 kind: .screenRecordings,
                 title: "可能的屏幕录制",
                 englishTitle: "Possible Screen Recordings",
-                detail: "基于尺寸和时长线索谨慎识别",
+                detail: "优先使用图库标记，并结合本机线索谨慎识别",
                 systemImage: "record.circle",
                 itemCount: screenRecordingCount,
                 estimatedBytes: estimatedScreenRecordingBytes

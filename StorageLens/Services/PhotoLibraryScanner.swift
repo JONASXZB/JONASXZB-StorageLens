@@ -342,7 +342,21 @@ final class PhotoLibraryScanner {
     }
 
     private func isLikelyScreenRecording(_ asset: PHAsset) -> Bool {
-        guard asset.mediaType == .video, asset.duration >= 5 else { return false }
+        guard asset.mediaType == .video else { return false }
+        if asset.mediaSubtypes.contains(.videoScreenRecording) {
+            return true
+        }
+
+        let cameraVideoSubtypes: PHAssetMediaSubtype = [
+            .videoHighFrameRate,
+            .videoTimelapse,
+            .videoCinematic
+        ]
+        guard asset.mediaSubtypes.intersection(cameraVideoSubtypes).isEmpty,
+              asset.duration >= 5 else {
+            return false
+        }
+
         let width = max(asset.pixelWidth, 1)
         let height = max(asset.pixelHeight, 1)
         let longSide = max(width, height)
