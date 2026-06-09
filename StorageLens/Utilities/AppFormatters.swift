@@ -41,7 +41,8 @@ enum AppFormatters {
     }()
 
     static func fileSize(_ bytes: Int64?) -> String {
-        guard let bytes, bytes > 0 else { return "待估算" }
+        guard let bytes else { return "待估算" }
+        guard bytes > 0 else { return "0 KB" }
         return byteFormatter.string(fromByteCount: bytes)
     }
 
@@ -72,7 +73,11 @@ enum AppFormatters {
     }
 
     static func monthKey(for item: MediaAssetItem) -> String {
-        guard let date = item.creationDate else { return "unknown" }
+        monthKey(for: item.creationDate)
+    }
+
+    static func monthKey(for date: Date?) -> String {
+        guard let date else { return "unknown" }
         return monthKeyFormatter.string(from: date)
     }
 }

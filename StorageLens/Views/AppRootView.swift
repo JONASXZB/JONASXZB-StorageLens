@@ -21,4 +21,5 @@ struct AppRootView: View {
 #Preview {
     AppRootView()
         .environmentObject(PhotoLibraryPermissionManager())
+        .environmentObject(ReviewBasketStore())
 }

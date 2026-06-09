@@ -1,6 +1,85 @@
 import Combine
 import Foundation
 
+@MainActor
+final class ReviewBasketStore: ObservableObject {
+    @Published private(set) var itemsByID: [String: ReviewBasketItem] = [:]
+    @Published private(set) var isDeleting = false
+    @Published var message: UserMessage?
+    @Published var cleanupResult: CleanupResult?
+
+    private let deletionService: PhotoDeletionService
+
+    init(deletionService: PhotoDeletionService = PhotoDeletionService()) {
+        self.deletionService = deletionService
+    }
+
+    var items: [ReviewBasketItem] {
+        itemsByID.values.sorted {
+            ($0.item.estimatedFileSize ?? 0, $0.item.creationDate ?? .distantPast) >
+                ($1.item.estimatedFileSize ?? 0, $1.item.creationDate ?? .distantPast)
+        }
+    }
+
+    var itemCount: Int { itemsByID.count }
+
+    var estimatedBytes: Int64 {
+        itemsByID.values.compactMap(\.item.estimatedFileSize).reduce(0, +)
+    }
+
+    var includedCategoryTitles: String {
+        let kinds = Set(itemsByID.values.flatMap(\.categoryKinds))
+        return CleanupCategoryKind.allCases
+            .filter { kinds.contains($0) }
+            .map(\.title)
+            .joined(separator: "、")
+    }
+
+    func add(_ items: [MediaAssetItem], from categoryKind: CleanupCategoryKind) {
+        for item in items {
+            let categoryKinds = itemsByID[item.id]?.categoryKinds.union([categoryKind]) ?? [categoryKind]
+            itemsByID[item.id] = ReviewBasketItem(item: item, categoryKinds: categoryKinds)
+        }
+        Haptics.selectionChanged()
+    }
+
+    func remove(_ item: ReviewBasketItem) {
+        itemsByID.removeValue(forKey: item.id)
+        Haptics.selectionChanged()
+    }
+
+    func clear() {
+        itemsByID.removeAll()
+    }
+
+    func deleteAll() async {
+        let ids = Set(itemsByID.keys)
+        let requestedItems = itemsByID
+        guard !ids.isEmpty else { return }
+
+        isDeleting = true
+        defer { isDeleting = false }
+
+        do {
+            let deletedIDs = try await deletionService.deleteAssets(withLocalIdentifiers: ids)
+            let deletedBytes = deletedIDs
+                .compactMap { requestedItems[$0]?.item.estimatedFileSize }
+                .reduce(0, +)
+            itemsByID.removeAll()
+            cleanupResult = CleanupResult(
+                deletedCount: deletedIDs.count,
+                unavailableCount: ids.subtracting(deletedIDs).count,
+                estimatedBytes: deletedBytes
+            )
+            if !deletedIDs.isEmpty {
+                Haptics.cleanupSucceeded()
+            }
+        } catch {
+            message = UserMessage(title: "删除失败", message: error.localizedDescription)
+        }
+    }
+}
+
 enum OldMediaFilter: String, CaseIterable, Identifiable {
     case sixMonths
     case oneYear
@@ -33,6 +112,62 @@ enum OldMediaFilter: String, CaseIterable, Identifiable {
     }
 }
 
+enum ScreenshotAgeFilter: String, CaseIterable, Identifiable {
+    case all
+    case threeMonths
+    case sixMonths
+    case oneYear
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:
+            return "全部"
+        case .threeMonths:
+            return "3 个月+"
+        case .sixMonths:
+            return "6 个月+"
+        case .oneYear:
+            return "1 年+"
+        }
+    }
+
+    var cutoffDate: Date? {
+        let months: Int
+        switch self {
+        case .all:
+            return nil
+        case .threeMonths:
+            months = -3
+        case .sixMonths:
+            months = -6
+        case .oneYear:
+            months = -12
+        }
+        return Calendar.current.date(byAdding: .month, value: months, to: Date())
+    }
+}
+
+enum MediaSort: String, CaseIterable, Identifiable {
+    case estimatedSize
+    case date
+    case duration
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .estimatedSize:
+            return "按大小"
+        case .date:
+            return "按日期"
+        case .duration:
+            return "按时长"
+        }
+    }
+}
+
 enum OldMediaSort: String, CaseIterable, Identifiable {
     case estimatedSize
     case date
@@ -53,26 +188,27 @@ enum OldMediaSort: String, CaseIterable, Identifiable {
 final class LargeVideosViewModel: ObservableObject {
     @Published private(set) var items: [MediaAssetItem] = []
     @Published var selectedIDs: Set<String> = []
+    @Published var sort: MediaSort = .estimatedSize {
+        didSet { applySort() }
+    }
     @Published private(set) var isLoading = false
-    @Published private(set) var isDeleting = false
     @Published var message: UserMessage?
 
     private let scanner: PhotoLibraryScanner
-    private let deletionService: PhotoDeletionService
 
-    init(
-        scanner: PhotoLibraryScanner = PhotoLibraryScanner(),
-        deletionService: PhotoDeletionService = PhotoDeletionService()
-    ) {
+    init(scanner: PhotoLibraryScanner = PhotoLibraryScanner()) {
         self.scanner = scanner
-        self.deletionService = deletionService
     }
 
     var selectedEstimatedBytes: Int64 {
-        items
-            .filter { selectedIDs.contains($0.id) }
+        selectedItems
             .compactMap(\.estimatedFileSize)
             .reduce(0, +)
+    }
+
+    var selectedItems: [MediaAssetItem] {
+        items
+            .filter { selectedIDs.contains($0.id) }
     }
 
     func load() async {
@@ -81,6 +217,7 @@ final class LargeVideosViewModel: ObservableObject {
 
         do {
             items = try await scanner.fetchLargeVideos()
+            applySort()
             selectedIDs = selectedIDs.intersection(Set(items.map(\.id)))
         } catch {
             message = UserMessage(title: "无法载入大视频", message: error.localizedDescription)
@@ -96,27 +233,8 @@ final class LargeVideosViewModel: ObservableObject {
         Haptics.selectionChanged()
     }
 
-    func deleteSelected() async {
-        let ids = selectedIDs
-        let itemCount = ids.count
-        let estimatedBytes = selectedEstimatedBytes
-        guard !ids.isEmpty else { return }
-
-        isDeleting = true
-        defer { isDeleting = false }
-
-        do {
-            try await deletionService.deleteAssets(withLocalIdentifiers: ids)
-            Haptics.cleanupSucceeded()
-            selectedIDs.removeAll()
-            await load()
-            message = UserMessage(
-                title: "已删除所选视频",
-                message: "已删除 \(itemCount) 个项目，预计释放 \(AppFormatters.fileSize(estimatedBytes))。"
-            )
-        } catch {
-            message = UserMessage(title: "删除失败", message: error.localizedDescription)
-        }
+    private func applySort() {
+        items.sort(using: sort)
     }
 }
 
@@ -124,19 +242,14 @@ final class LargeVideosViewModel: ObservableObject {
 final class ScreenshotsViewModel: ObservableObject {
     @Published private(set) var groups: [ScreenshotMonthGroup] = []
     @Published var selectedIDs: Set<String> = []
+    @Published var filter: ScreenshotAgeFilter = .all
     @Published private(set) var isLoading = false
-    @Published private(set) var isDeleting = false
     @Published var message: UserMessage?
 
     private let scanner: PhotoLibraryScanner
-    private let deletionService: PhotoDeletionService
 
-    init(
-        scanner: PhotoLibraryScanner = PhotoLibraryScanner(),
-        deletionService: PhotoDeletionService = PhotoDeletionService()
-    ) {
+    init(scanner: PhotoLibraryScanner = PhotoLibraryScanner()) {
         self.scanner = scanner
-        self.deletionService = deletionService
     }
 
     var allItems: [MediaAssetItem] {
@@ -144,10 +257,14 @@ final class ScreenshotsViewModel: ObservableObject {
     }
 
     var selectedEstimatedBytes: Int64 {
-        allItems
-            .filter { selectedIDs.contains($0.id) }
+        selectedItems
             .compactMap(\.estimatedFileSize)
             .reduce(0, +)
+    }
+
+    var selectedItems: [MediaAssetItem] {
+        allItems
+            .filter { selectedIDs.contains($0.id) }
     }
 
     func load() async {
@@ -155,8 +272,12 @@ final class ScreenshotsViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let items = try await scanner.fetchScreenshots()
-            groups = Dictionary(grouping: items) { item in
+            let loadedItems = try await scanner.fetchScreenshots()
+            let filteredItems = loadedItems.filter { item in
+                guard let cutoffDate = filter.cutoffDate else { return true }
+                return (item.creationDate ?? .distantFuture) < cutoffDate
+            }
+            groups = Dictionary(grouping: filteredItems) { item in
                 AppFormatters.monthKey(for: item)
             }
                 .map { key, items in
@@ -167,7 +288,7 @@ final class ScreenshotsViewModel: ObservableObject {
                     )
                 }
                 .sorted { $0.id > $1.id }
-            selectedIDs = selectedIDs.intersection(Set(items.map(\.id)))
+            selectedIDs = selectedIDs.intersection(Set(filteredItems.map(\.id)))
         } catch {
             message = UserMessage(title: "无法载入截图", message: error.localizedDescription)
         }
@@ -182,6 +303,11 @@ final class ScreenshotsViewModel: ObservableObject {
         Haptics.selectionChanged()
     }
 
+    func isMonthFullySelected(_ group: ScreenshotMonthGroup) -> Bool {
+        let groupIDs = Set(group.items.map(\.id))
+        return !groupIDs.isEmpty && groupIDs.isSubset(of: selectedIDs)
+    }
+
     func toggleMonth(_ group: ScreenshotMonthGroup) {
         let groupIDs = Set(group.items.map(\.id))
         if groupIDs.isSubset(of: selectedIDs) {
@@ -192,27 +318,99 @@ final class ScreenshotsViewModel: ObservableObject {
         Haptics.selectionChanged()
     }
 
-    func deleteSelected() async {
-        let ids = selectedIDs
-        let itemCount = ids.count
-        let estimatedBytes = selectedEstimatedBytes
-        guard !ids.isEmpty else { return }
+}
 
-        isDeleting = true
-        defer { isDeleting = false }
+@MainActor
+final class ScreenRecordingsViewModel: ObservableObject {
+    @Published private(set) var items: [MediaAssetItem] = []
+    @Published var selectedIDs: Set<String> = []
+    @Published var sort: MediaSort = .estimatedSize {
+        didSet { applySort() }
+    }
+    @Published private(set) var isLoading = false
+    @Published var message: UserMessage?
+
+    private let scanner: PhotoLibraryScanner
+
+    init(scanner: PhotoLibraryScanner = PhotoLibraryScanner()) {
+        self.scanner = scanner
+    }
+
+    var selectedEstimatedBytes: Int64 {
+        selectedItems.compactMap(\.estimatedFileSize).reduce(0, +)
+    }
+
+    var selectedItems: [MediaAssetItem] {
+        items.filter { selectedIDs.contains($0.id) }
+    }
+
+    func load() async {
+        isLoading = true
+        defer { isLoading = false }
 
         do {
-            try await deletionService.deleteAssets(withLocalIdentifiers: ids)
-            Haptics.cleanupSucceeded()
-            selectedIDs.removeAll()
-            await load()
-            message = UserMessage(
-                title: "已删除所选截图",
-                message: "已删除 \(itemCount) 个项目，预计释放 \(AppFormatters.fileSize(estimatedBytes))。"
-            )
+            items = try await scanner.fetchScreenRecordings()
+            applySort()
+            selectedIDs = selectedIDs.intersection(Set(items.map(\.id)))
         } catch {
-            message = UserMessage(title: "删除失败", message: error.localizedDescription)
+            message = UserMessage(title: "无法载入可能的屏幕录制", message: error.localizedDescription)
         }
+    }
+
+    func toggleSelection(for item: MediaAssetItem) {
+        if selectedIDs.contains(item.id) {
+            selectedIDs.remove(item.id)
+        } else {
+            selectedIDs.insert(item.id)
+        }
+        Haptics.selectionChanged()
+    }
+
+    private func applySort() {
+        items.sort(using: sort)
+    }
+}
+
+@MainActor
+final class LivePhotosViewModel: ObservableObject {
+    @Published private(set) var items: [MediaAssetItem] = []
+    @Published var selectedIDs: Set<String> = []
+    @Published private(set) var isLoading = false
+    @Published var message: UserMessage?
+
+    private let scanner: PhotoLibraryScanner
+
+    init(scanner: PhotoLibraryScanner = PhotoLibraryScanner()) {
+        self.scanner = scanner
+    }
+
+    var selectedEstimatedBytes: Int64 {
+        selectedItems.compactMap(\.estimatedFileSize).reduce(0, +)
+    }
+
+    var selectedItems: [MediaAssetItem] {
+        items.filter { selectedIDs.contains($0.id) }
+    }
+
+    func load() async {
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            items = try await scanner.fetchLivePhotos()
+            selectedIDs = selectedIDs.intersection(Set(items.map(\.id)))
+        } catch {
+            message = UserMessage(title: "无法载入 Live Photos", message: error.localizedDescription)
+        }
+    }
+
+    func toggleSelection(for item: MediaAssetItem) {
+        if selectedIDs.contains(item.id) {
+            selectedIDs.remove(item.id)
+        } else {
+            selectedIDs.insert(item.id)
+        }
+        Haptics.selectionChanged()
     }
 }
 
@@ -225,25 +423,23 @@ final class OldMediaViewModel: ObservableObject {
         didSet { applySort() }
     }
     @Published private(set) var isLoading = false
-    @Published private(set) var isDeleting = false
     @Published var message: UserMessage?
 
     private let scanner: PhotoLibraryScanner
-    private let deletionService: PhotoDeletionService
 
-    init(
-        scanner: PhotoLibraryScanner = PhotoLibraryScanner(),
-        deletionService: PhotoDeletionService = PhotoDeletionService()
-    ) {
+    init(scanner: PhotoLibraryScanner = PhotoLibraryScanner()) {
         self.scanner = scanner
-        self.deletionService = deletionService
     }
 
     var selectedEstimatedBytes: Int64 {
-        items
-            .filter { selectedIDs.contains($0.id) }
+        selectedItems
             .compactMap(\.estimatedFileSize)
             .reduce(0, +)
+    }
+
+    var selectedItems: [MediaAssetItem] {
+        items
+            .filter { selectedIDs.contains($0.id) }
     }
 
     func load() async {
@@ -268,29 +464,6 @@ final class OldMediaViewModel: ObservableObject {
         Haptics.selectionChanged()
     }
 
-    func deleteSelected() async {
-        let ids = selectedIDs
-        let itemCount = ids.count
-        let estimatedBytes = selectedEstimatedBytes
-        guard !ids.isEmpty else { return }
-
-        isDeleting = true
-        defer { isDeleting = false }
-
-        do {
-            try await deletionService.deleteAssets(withLocalIdentifiers: ids)
-            Haptics.cleanupSucceeded()
-            selectedIDs.removeAll()
-            await load()
-            message = UserMessage(
-                title: "已删除所选旧媒体",
-                message: "已删除 \(itemCount) 个项目，预计释放 \(AppFormatters.fileSize(estimatedBytes))。"
-            )
-        } catch {
-            message = UserMessage(title: "删除失败", message: error.localizedDescription)
-        }
-    }
-
     private func applySort() {
         switch sort {
         case .estimatedSize:
@@ -306,23 +479,37 @@ final class OldMediaViewModel: ObservableObject {
     }
 }
 
+private extension Array where Element == MediaAssetItem {
+    mutating func sort(using sort: MediaSort) {
+        switch sort {
+        case .estimatedSize:
+            self.sort {
+                ($0.estimatedFileSize ?? 0, $0.creationDate ?? .distantPast) >
+                    ($1.estimatedFileSize ?? 0, $1.creationDate ?? .distantPast)
+            }
+        case .date:
+            self.sort {
+                ($0.creationDate ?? .distantPast) > ($1.creationDate ?? .distantPast)
+            }
+        case .duration:
+            self.sort {
+                ($0.duration, $0.estimatedFileSize ?? 0) > ($1.duration, $1.estimatedFileSize ?? 0)
+            }
+        }
+    }
+}
+
 @MainActor
 final class SimilarPhotosViewModel: ObservableObject {
     @Published private(set) var groups: [SimilarPhotoGroup] = []
     @Published var selectedIDs: Set<String> = []
     @Published private(set) var isLoading = false
-    @Published private(set) var isDeleting = false
     @Published var message: UserMessage?
 
     private let scanner: PhotoLibraryScanner
-    private let deletionService: PhotoDeletionService
 
-    init(
-        scanner: PhotoLibraryScanner = PhotoLibraryScanner(),
-        deletionService: PhotoDeletionService = PhotoDeletionService()
-    ) {
+    init(scanner: PhotoLibraryScanner = PhotoLibraryScanner()) {
         self.scanner = scanner
-        self.deletionService = deletionService
     }
 
     var allItems: [MediaAssetItem] {
@@ -330,10 +517,21 @@ final class SimilarPhotosViewModel: ObservableObject {
     }
 
     var selectedEstimatedBytes: Int64 {
-        allItems
-            .filter { selectedIDs.contains($0.id) }
+        selectedItems
             .compactMap(\.estimatedFileSize)
             .reduce(0, +)
+    }
+
+    var selectedItems: [MediaAssetItem] {
+        allItems
+            .filter { selectedIDs.contains($0.id) }
+    }
+
+    var selectedRecommendedKeepCount: Int {
+        groups.reduce(0) { count, group in
+            guard let keepID = group.recommendedKeepID else { return count }
+            return selectedIDs.contains(keepID) ? count + 1 : count
+        }
     }
 
     func load() async {
@@ -357,26 +555,16 @@ final class SimilarPhotosViewModel: ObservableObject {
         Haptics.selectionChanged()
     }
 
-    func deleteSelected() async {
-        let ids = selectedIDs
-        let itemCount = ids.count
-        let estimatedBytes = selectedEstimatedBytes
-        guard !ids.isEmpty else { return }
+    func selectLikelyDuplicates(in group: SimilarPhotoGroup) {
+        let keepID = group.recommendedKeepID
+        let duplicateIDs = group.items
+            .map(\.id)
+            .filter { $0 != keepID }
 
-        isDeleting = true
-        defer { isDeleting = false }
-
-        do {
-            try await deletionService.deleteAssets(withLocalIdentifiers: ids)
-            Haptics.cleanupSucceeded()
-            selectedIDs.removeAll()
-            await load()
-            message = UserMessage(
-                title: "已删除所选照片",
-                message: "已删除 \(itemCount) 个项目，预计释放 \(AppFormatters.fileSize(estimatedBytes))。"
-            )
-        } catch {
-            message = UserMessage(title: "删除失败", message: error.localizedDescription)
+        selectedIDs.formUnion(duplicateIDs)
+        if let keepID {
+            selectedIDs.remove(keepID)
         }
+        Haptics.selectionChanged()
     }
 }

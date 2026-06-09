@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import Photos
+import PhotosUI
 import UIKit
 
 @MainActor
@@ -48,5 +49,47 @@ final class PhotoLibraryPermissionManager: ObservableObject {
     func openAppSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
+    }
+
+    func presentLimitedLibraryPicker() {
+        guard status == .limited else {
+            openAppSettings()
+            return
+        }
+
+        guard let presenter = UIApplication.shared.activeTopViewController else { return }
+        PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: presenter) { [weak self] _ in
+            Task { await self?.refresh() }
+        }
+    }
+}
+
+private extension UIApplication {
+    var activeTopViewController: UIViewController? {
+        connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }?
+            .windows
+            .first { $0.isKeyWindow }?
+            .rootViewController?
+            .topMostPresentedViewController
+    }
+}
+
+private extension UIViewController {
+    var topMostPresentedViewController: UIViewController {
+        if let navigationController = self as? UINavigationController {
+            return navigationController.visibleViewController?.topMostPresentedViewController ?? navigationController
+        }
+
+        if let tabBarController = self as? UITabBarController {
+            return tabBarController.selectedViewController?.topMostPresentedViewController ?? tabBarController
+        }
+
+        if let presentedViewController {
+            return presentedViewController.topMostPresentedViewController
+        }
+
+        return self
     }
 }

@@ -8,10 +8,11 @@ struct PermissionView: View {
             VStack(spacing: 28) {
                 Spacer(minLength: 24)
 
-                Image("StorageLensMark")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 96, height: 96)
+                Image(systemName: "photo.stack.fill")
+                    .font(.system(size: 48, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 92, height: 92)
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .accessibilityHidden(true)
 
                 VStack(spacing: 10) {
@@ -42,19 +43,29 @@ struct PermissionView: View {
                     )
                     PermissionPointRow(
                         systemImage: "checkmark.circle",
-                        title: "由你决定删除内容",
-                        detail: "删除前始终由你手动选择并确认。",
-                        englishDetail: "You choose what to delete."
+                        title: "由你决定整理内容",
+                        detail: "移除前始终由你手动选择并确认。",
+                        englishDetail: "You confirm every change."
                     )
                 }
                 .padding()
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                 if permissionManager.status == .limited {
-                    Label("当前是部分访问模式，可在系统设置中调整可见照片。", systemImage: "exclamationmark.triangle")
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                        .multilineTextAlignment(.leading)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("当前是部分访问模式，分析结果只包含你选择的照片。", systemImage: "exclamationmark.triangle")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                            .multilineTextAlignment(.leading)
+
+                        Button {
+                            permissionManager.presentLimitedLibraryPicker()
+                        } label: {
+                            Label("选择更多照片", systemImage: "photo.stack")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
 
                 VStack(spacing: 12) {
