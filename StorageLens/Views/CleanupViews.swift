@@ -541,12 +541,12 @@ struct CleanupResultView: View {
             List {
                 Section {
                     VStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle")
+                        Image(systemName: result.deletedCount > 0 ? "checkmark.circle" : "photo.badge.exclamationmark")
                             .font(.system(size: 48))
-                            .foregroundStyle(.green)
-                        Text("删除完成")
+                            .foregroundStyle(result.deletedCount > 0 ? Color.green : Color.secondary)
+                        Text(result.deletedCount > 0 ? "删除完成" : "没有可删除项目")
                             .font(.title2.bold())
-                        Text("已删除 \(result.deletedCount) 个项目，估算释放 \(AppFormatters.fileSize(result.estimatedBytes))。")
+                        Text(resultSummary)
                             .font(.body)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -555,9 +555,18 @@ struct CleanupResultView: View {
                     .padding(.vertical, 24)
                 }
 
-                Section {
-                    Text("已删除项目会进入系统照片的“最近删除”。如果需要恢复，请前往照片 App 查看。")
-                        .foregroundStyle(.secondary)
+                if result.deletedCount > 0 {
+                    Section {
+                        Text("已删除项目会进入系统照片的“最近删除”。如果需要恢复，请前往照片 App 查看。")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if result.unavailableCount > 0 {
+                    Section("未处理项目") {
+                        Text("另有 \(result.unavailableCount) 个项目在确认前已不在当前可访问的照片图库中，因此未计入删除结果。")
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .navigationTitle("结果")
@@ -569,6 +578,13 @@ struct CleanupResultView: View {
                 }
             }
         }
+    }
+
+    private var resultSummary: String {
+        guard result.deletedCount > 0 else {
+            return "确认时没有在当前可访问的照片图库中找到可删除项目。"
+        }
+        return "已删除 \(result.deletedCount) 个项目，估算释放 \(AppFormatters.fileSize(result.estimatedBytes))。"
     }
 }
 

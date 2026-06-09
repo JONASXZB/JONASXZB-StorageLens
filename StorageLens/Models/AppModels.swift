@@ -264,6 +264,7 @@ struct ReviewBasketItem: Identifiable, Hashable {
 struct CleanupResult: Identifiable, Hashable {
     let id = UUID()
     let deletedCount: Int
+    let unavailableCount: Int
     let estimatedBytes: Int64
 }
 

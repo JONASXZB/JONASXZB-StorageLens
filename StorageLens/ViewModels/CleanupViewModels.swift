@@ -53,18 +53,26 @@ final class ReviewBasketStore: ObservableObject {
 
     func deleteAll() async {
         let ids = Set(itemsByID.keys)
-        let deletedCount = ids.count
-        let deletedBytes = estimatedBytes
+        let requestedItems = itemsByID
         guard !ids.isEmpty else { return }
 
         isDeleting = true
         defer { isDeleting = false }
 
         do {
-            try await deletionService.deleteAssets(withLocalIdentifiers: ids)
+            let deletedIDs = try await deletionService.deleteAssets(withLocalIdentifiers: ids)
+            let deletedBytes = deletedIDs
+                .compactMap { requestedItems[$0]?.item.estimatedFileSize }
+                .reduce(0, +)
             itemsByID.removeAll()
-            cleanupResult = CleanupResult(deletedCount: deletedCount, estimatedBytes: deletedBytes)
-            Haptics.cleanupSucceeded()
+            cleanupResult = CleanupResult(
+                deletedCount: deletedIDs.count,
+                unavailableCount: ids.subtracting(deletedIDs).count,
+                estimatedBytes: deletedBytes
+            )
+            if !deletedIDs.isEmpty {
+                Haptics.cleanupSucceeded()
+            }
         } catch {
             message = UserMessage(title: "删除失败", message: error.localizedDescription)
         }
